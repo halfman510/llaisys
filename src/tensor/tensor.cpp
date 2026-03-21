@@ -15,40 +15,40 @@ tensor_t Tensor::create(const std::vector<size_t> &shape,
                         llaisysDataType_t dtype,
                         llaisysDeviceType_t device_type,
                         int device) {
-    size_t ndim_ = shape.size();
+    size_t ndim_ = shape.size();//保存维度数量
     std::vector<ptrdiff_t> strides(ndim_);
     size_t stride = 1;
-    for (size_t i = 1; i <= ndim_; i++) {
+    for (size_t i = 1; i <= ndim_; i++) {//累计计算得到总元素数(从最低维度开始计算，算每层stride步长 * 上一层shape形状)
         strides[ndim_ - i] = stride;
         stride *= shape[ndim_ - i];
     }
     TensorMeta meta{dtype, shape, strides};
     size_t total_elems = stride;
-    size_t dtype_size = utils::dsize(dtype);
+    size_t dtype_size = utils::dsize(dtype);//获取单个元素有多少字节
 
-    if (device_type == LLAISYS_DEVICE_CPU && core::context().runtime().deviceType() != LLAISYS_DEVICE_CPU) {
+    if (device_type == LLAISYS_DEVICE_CPU && core::context().runtime().deviceType() != LLAISYS_DEVICE_CPU) {//请求CPU张量，但当前上下文设备不是CPU
         auto storage = core::context().runtime().allocateHostStorage(total_elems * dtype_size);
         return std::shared_ptr<Tensor>(new Tensor(meta, storage));
     } else {
         core::context().setDevice(device_type, device);
-        auto storage = core::context().runtime().allocateDeviceStorage(total_elems * dtype_size);
+        auto storage = core::context().runtime().allocateDeviceStorage(total_elems * dtype_size);//对CPU来说等价host，GPU是设备内存
         return std::shared_ptr<Tensor>(new Tensor(meta, storage));
     }
 }
 
-std::byte *Tensor::data() {
+std::byte *Tensor::data() {//指向tensor的起始位置
     return _storage->memory() + _offset;
 }
 
-const std::byte *Tensor::data() const {
+const std::byte *Tensor::data() const {//同上，const常量不可修改，可以用来读
     return _storage->memory() + _offset;
 }
 
-size_t Tensor::ndim() const {
+size_t Tensor::ndim() const {//返回tensor维度
     return _meta.shape.size();
 }
 
-const std::vector<size_t> &Tensor::shape() const {
+const std::vector<size_t> &Tensor::shape() const {//返回形状（各维度大小），比如{2, 3, 4}是一个三维tensor
     return _meta.shape;
 }
 
@@ -56,11 +56,11 @@ const std::vector<ptrdiff_t> &Tensor::strides() const {
     return _meta.strides;
 }
 
-llaisysDataType_t Tensor::dtype() const {
+llaisysDataType_t Tensor::dtype() const {//返回数据枚举类型
     return _meta.dtype;
 }
 
-llaisysDeviceType_t Tensor::deviceType() const {
+llaisysDeviceType_t Tensor::deviceType() const {//CPU还是GPU
     return _storage->deviceType();
 }
 
@@ -68,7 +68,7 @@ int Tensor::deviceId() const {
     return _storage->deviceId();
 }
 
-size_t Tensor::numel() const {
+size_t Tensor::numel() const {//返回总元素数，shape维度累乘，{2,3} 返回 6
     return std::accumulate(_meta.shape.begin(), _meta.shape.end(), size_t(1), std::multiplies<size_t>());
 }
 
@@ -76,7 +76,7 @@ size_t Tensor::elementSize() const {
     return utils::dsize(_meta.dtype);
 }
 
-std::string Tensor::info() const {
+std::string Tensor::info() const {//输出格式化描述字符串
     std::stringstream ss;
 
     ss << "Tensor: "
@@ -164,7 +164,23 @@ void Tensor::debug() const {
 }
 
 bool Tensor::isContiguous() const {
-    TO_BE_IMPLEMENTED();
+    const auto &shape_ = this->shape();//auto编译器自动推导变量，避免手写类型和返回类型不一样
+    const auto &strides_ = this->strides();
+
+    if(shape_.size() != strides_.size()) {
+        return false;
+    }
+    if(this->numel() == 0){
+        return false;
+    }
+
+    ptrdiff_t expected = 1;//ptrdiff_t指针差值类型，有符号整数，用于可能出现负数的场景，比如： stride、索引差
+    for (size_t i = shape_.size(); i-- > 0;){//和(size_t i = n; i > 0; i--)不等价，第一种循环体内取值为n-1 ... 0（判断条件时就-1），第二种循环体内取值为n ... 1（判断条件只比较不改值，每轮末尾执行）
+        if (strides_[i] != expected) {
+            return false;
+        }
+        expected *= static_cast<ptrdiff_t>(shape_[i]);//static_cast显式类型转换
+    }
     return true;
 }
 
@@ -183,8 +199,16 @@ tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
     return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
 }
 
-void Tensor::load(const void *src_) {
-    TO_BE_IMPLEMENTED();
+void Tensor::load(const void *src_) {//把主机端的数据，复制到张量storage对应位置中
+    const size_t bytes = this->numel() * this->elementSize();
+    if(bytes == 0) {
+        return;
+    }
+    CHECK_ARGUMENT(src_ != nullptr, "source pointer must not be null");
+
+    core::context().setDevice(this->deviceType(), this->deviceId());
+    const llaisysMemcpyKind_t memcpy_kind = (this->deviceType() == LLAISYS_DEVICE_CPU) ? LLAISYS_MEMCPY_H2H : LLAISYS_MEMCPY_H2D;
+    core::context().runtime().api()->memcpy_sync(this->data(), src_, bytes, memcpy_kind);
 }
 
 tensor_t Tensor::contiguous() const {
