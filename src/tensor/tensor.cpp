@@ -189,8 +189,30 @@ tensor_t Tensor::permute(const std::vector<size_t> &order) const {
     return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
 }
 
-tensor_t Tensor::view(const std::vector<size_t> &shape) const {
-    TO_BE_IMPLEMENTED();
+tensor_t Tensor::view(const std::vector<size_t> &shape) const {//只有连续张量，才可以通过拆分或合并改变形状，不连续张量不可以
+    //1.元素总数一致
+    const size_t old_numel = this->numel();
+    const size_t new_numel = std::accumulate(shape.begin(), shape.end(), size_t(1), std::multiplies<size_t>());//multiplies<size_t>，size_t确定参与乘法的类型
+    
+    CHECK_ARGUMENT(
+        old_numel != new_numel, 
+        "view shape is incompatible with input tensor numel");
+
+    //2.是否连续
+    CHECK_ARGUMENT(
+        this->isContiguous(), 
+        "view requires contiguous input tensor");
+
+    //3.创建新shape的新stride
+    std::vector<ptrdiff_t> new_strides(shape.size(), 0);//新步长vector长度 = shape.size()shape维度，后面的0是填充每个元素初值为0
+    ptrdiff_t stride = 1;
+    for(size_t i = shape.size(); i-- > 0;){
+        new_strides[i] = stride;
+        stride *= static_cast<ptrdiff_t>(shape[i]);
+    }
+
+    //4.共享storage
+    TensorMeta new_meta{this->dtype(), shape, std::move(new_strides)};//shape传的是拷贝，new_strides是局部变量，后面再也不需要，move比拷贝开销更小，move后原来的new_strides为空
     return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
 }
 
