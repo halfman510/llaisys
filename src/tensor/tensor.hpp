@@ -6,7 +6,7 @@ namespace llaisys {
 class Tensor;
 using tensor_t = std::shared_ptr<Tensor>;
 
-struct TensorMeta {
+struct TensorMeta {//TensorMeta元信息是tensor张量的一个组成部分
     llaisysDataType_t dtype;
     std::vector<size_t> shape;
     std::vector<ptrdiff_t> strides;
@@ -14,7 +14,7 @@ struct TensorMeta {
 
 class Tensor {
 private:
-    TensorMeta _meta;
+    TensorMeta _meta;//TensorMeta元信息是tensor张量的一个组成部分
     core::storage_t _storage;
     size_t _offset;
     Tensor(TensorMeta meta, core::storage_t storage, size_t offset = 0);

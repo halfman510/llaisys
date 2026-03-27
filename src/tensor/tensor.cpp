@@ -185,8 +185,33 @@ bool Tensor::isContiguous() const {
 }
 
 tensor_t Tensor::permute(const std::vector<size_t> &order) const {
-    TO_BE_IMPLEMENTED();
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+    const size_t n = this->ndim();
+    // 1.检查改变前后维度是否相同
+    CHECK_ARGUMENT(
+        order.size() == n,
+        "permute order size must equel to tensor ndim");
+
+    // 2.检查 order 是否合法，order 必须是[0,n)的一个不重复不越界的排列
+    std::vector<bool> seen(n, false);
+    for(size_t i = 0; i < n; i++){
+        const size_t axis = order[i];
+        CHECK_ARGUMENT(axis < n, "permute order contains out-of-range axis");
+        CHECK_ARGUMENT(!seen[axis], "permute order contains duplicate axis");
+        seen[axis] = true;
+    }
+
+    // 3.根据 order 重排 shape 和 stride
+    std::vector<size_t> new_shape(n);
+    std::vector<ptrdiff_t> new_strides(n);//这里类型自适应，否则容易搞不对类型报错
+    for(size_t i = 0; i < n; i++){
+        new_shape[i] = _meta.shape[order[i]];//_meta是当前this对象的私有成员变量，直接用就可以访问
+        new_strides[i] = _meta.strides[order[i]];//strides 描述数据在内存中的真实布局，因此这里不用按照连续的来设置 strides
+    }
+
+    // 4.共享 storage,不拷贝数据，保留 offset
+    TensorMeta new_meta{_meta.dtype, std::move(new_shape), std::move(new_strides)};//C++列表初始化，针对聚合类型（struch，公开成员、无自定义构造函数）
+
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage));
 }
 
 tensor_t Tensor::view(const std::vector<size_t> &shape) const {//只有连续张量，才可以通过拆分或合并改变形状，不连续张量不可以
@@ -195,7 +220,7 @@ tensor_t Tensor::view(const std::vector<size_t> &shape) const {//只有连续张
     const size_t new_numel = std::accumulate(shape.begin(), shape.end(), size_t(1), std::multiplies<size_t>());//multiplies<size_t>，size_t确定参与乘法的类型
     
     CHECK_ARGUMENT(
-        old_numel != new_numel, 
+        old_numel == new_numel, 
         "view shape is incompatible with input tensor numel");
 
     //2.是否连续
@@ -216,9 +241,26 @@ tensor_t Tensor::view(const std::vector<size_t> &shape) const {//只有连续张
     return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
 }
 
-tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
-    TO_BE_IMPLEMENTED();
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {//在第 dim 个维度上，取 [start, end) 这一段
+    // 1.检查参数
+    CHECK_ARGUMENT(dim < this->ndim(), "slice dim out of range");
+    CHECK_ARGUMENT(start <= end, "slice requires start <= end");
+    CHECK_ARGUMENT(end < _meta.shape[dim], "slice end out of range");
+
+    // 2.修改 shape
+    std::vector<size_t> new_shape = _meta.shape;//因为函数后面加了const，所以不能修改当前对象 this
+    new_shape[dim] = end - start;
+
+    // 3.stride 不变
+    std::vector<ptrdiff_t> new_strides = _meta.strides;
+
+    // 4.offset
+    size_t new_offset = _offset + start * static_cast<size_t>(_meta.strides[dim]) * this->elementSize();//强制类型转换，是因为这里有的有符号、有的无符号，混算有隐式转换，还容易有编译警告
+
+    // 5.构造新meta
+    TensorMeta new_meta{this->dtype(), std::move(new_shape), std::move(new_strides)};
+    return std::shared_ptr<Tensor>(new Tensor(std::move(new_meta), this->_storage, new_offset));
+    // return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage));
 }
 
 void Tensor::load(const void *src_) {//把主机端的数据，复制到张量storage对应位置中
