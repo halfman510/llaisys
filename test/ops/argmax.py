@@ -21,8 +21,8 @@ def test_op_argmax(
 ):
     print(f"   shape {shape} dtype <{dtype_name}>")
     vals, vals_ = random_tensor(shape, dtype_name, device_name)
-    max_idx, max_idx_ = zero_tensor((1,), "i64", device_name)
-    max_val, max_val_ = zero_tensor((1,), dtype_name, device_name)
+    max_idx, max_idx_ = zero_tensor((1,), "i64", device_name)#规定了max_idx_是i64类型
+    max_val, max_val_ = zero_tensor((1,), dtype_name, device_name)#类型和vals一样
 
     torch_argmax(max_idx, max_val, vals)
     llaisys.Ops.argmax(max_idx_, max_val_, vals_)

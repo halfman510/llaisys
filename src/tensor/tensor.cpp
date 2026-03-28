@@ -238,7 +238,7 @@ tensor_t Tensor::view(const std::vector<size_t> &shape) const {//只有连续张
 
     //4.共享storage
     TensorMeta new_meta{this->dtype(), shape, std::move(new_strides)};//shape传的是拷贝，new_strides是局部变量，后面再也不需要，move比拷贝开销更小，move后原来的new_strides为空
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage));
 }
 
 tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {//在第 dim 个维度上，取 [start, end) 这一段

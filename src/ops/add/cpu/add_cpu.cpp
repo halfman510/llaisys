@@ -7,8 +7,8 @@
 template <typename T>
 void add_(T *c, const T *a, const T *b, size_t numel) {
     for (size_t i = 0; i < numel; i++) {
-        if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {
-            c[i] = llaisys::utils::cast<T>(llaisys::utils::cast<float>(a[i]) + llaisys::utils::cast<float>(b[i]));
+        if constexpr (std::is_same_v<T, llaisys::bf16_t> || std::is_same_v<T, llaisys::fp16_t>) {//constexpr编译期分支，普通if是运行时判断；is_same_v编译期布尔常量，判断模板类型T和bf16_t类型是否相同 -> 如果T是bf16或fp16，走特殊计算路径
+            c[i] = llaisys::utils::cast<T>(llaisys::utils::cast<float>(a[i]) + llaisys::utils::cast<float>(b[i]));//先转成float FP32计算，再转回T存储，避免出现精度和细节实现问题
         } else {
             c[i] = a[i] + b[i];
         }

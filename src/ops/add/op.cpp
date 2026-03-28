@@ -22,7 +22,7 @@ void add(tensor_t c, tensor_t a, tensor_t b) {
 
     switch (c->deviceType()) {
     case LLAISYS_DEVICE_CPU:
-        return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());
+        return cpu::add(c->data(), a->data(), b->data(), c->dtype(), c->numel());//和上面的功能一样，应该是为了以后适配NV和其它卡用的
 #ifdef ENABLE_NVIDIA_API
     case LLAISYS_DEVICE_NVIDIA:
         TO_BE_IMPLEMENTED();
